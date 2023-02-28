@@ -1,0 +1,89 @@
+---
+layout: post
+title:  "FSM"
+date:   2021-09-09
+categories: jekyll update
+---
+This FSM (Finite State Machine) was written for a Unity game but it doesn't have any Unity dependencies and can be used in any C# project. It consist of two components: StateMachine and State described by `IStateMachine` and `IState` interfaces.
+
+The `IState` has a `Enter()` and `Exit()` methods that are called once and `Run()` method that the StateMachine iterates over.
+
+{% highlight csharp %}
+public interface IState
+{
+    IState nextState { get; }
+
+    void Enter();
+
+    /// <summary>
+    /// Method implementing this interface should `yield return` until the state is ready to exit.
+    /// </summary>
+    IEnumerable Run();
+
+    void Exit();
+}
+{% endhighlight %}
+
+The `IStateMachine` interface has a single method `Update()` which can be called from any Unity's update methods, coroutine or timer.
+
+{% highlight csharp %}
+public interface IStateMachine
+{
+    void Update();
+}
+{% endhighlight %}
+
+
+This `StateMachine` is a minimal implementation of the `IStateMachine` interface. `UpdateState()` method calls the current state's Run() iterator while it keeps yielding. After that the FSM advances to another state specified by the `nextState` property of the current state or simply stops. 
+
+{% highlight csharp %}
+public class StateMachine
+{
+    private IState nextState;
+    private IEnumerator stateUpdateEnumerator;
+
+    public IState currentState { get; protected set; }
+
+    public StateMachine(IState initialState)
+    {
+        currentState = initialState;
+    }
+
+    public virtual void Update()
+    {
+        stateUpdateEnumerator?.MoveNext();
+    }
+
+    /// <summary>
+    /// This method should `yield return` until there are no more states to update.
+    /// </summary>
+    protected virtual IEnumerable UpdateState()
+    {
+        while (true)
+        {
+            IEnumerator stateEnumerator = currentState.Run().GetEnumerator();
+            while (stateEnumerator.MoveNext() && nextState == null)
+            {
+                yield return stateEnumerator.Current;
+            }
+
+            currentState.Exit();
+
+            if (currentState.nextState == null && nextState == null)
+            {
+                yield break;
+            }
+
+            IState previousState = currentState;
+            currentState = nextState ?? currentState.nextState;
+            currentState.previousState = previousState;
+            nextState = null;
+
+            currentState.Enter();
+        }
+    }
+}
+{% endhighlight %}
+<br>
+
+This FSM is inspired by Jackson Dunstan's idea of a state being simply an iterator function implementing `IEnumerable` interface.

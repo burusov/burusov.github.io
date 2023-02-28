@@ -1,0 +1,108 @@
+---
+layout: post
+title:  "BFS"
+date:   2021-04-12
+categories: jekyll update
+---
+The code below was written for a puzzle game where the goal was to fill a container to a correct level by pouring liquid through series of gates.
+
+The algorithm of finding liquid areas consists of two passes of BFS (Breadth First Search) where each pass has different permeability threshold when selecting adjacent nodes (i.e. calling this method twice passing first `Permeability.OpenGate` then `Permeability.OpenPartitionGate`).
+1st pass: starting with any unvisited block visit all the adjacent left, right and top nodes separated by an open gate or anything more permeable. Pick another unvisited node. Repeat.
+2nd pass: starting with the lowest block unvisited in the 2nd pass visit the adjacent left, right and top blocks separated by an open partition gate or anything more permeable.
+Pick next lowest node unvisited during 2nd pass. Repeat.
+Each iteration the visited blocks are marked with the current iterations count.
+
+{% highlight csharp %}
+private Dictionary<int, HashSet<int>> SubdivideContinuousArea(GridModel gridModel, List<int> blockAndPartitionIds, Dictionary<int, HashSet<int>> firstPassIterations, Permeability threshold)
+{
+    // Sorting the blocks and partitions in ascending order.
+    blockAndPartitionIds.Sort((firstId, secondId) =>
+    {
+        RectFraction firstBounds = gridModel.bounds[firstId];
+        RectFraction secondBounds = gridModel.bounds[secondId];
+        return secondBounds.CompareBottomLeftTo(firstBounds);
+    });
+    HashSet<int> ids = new HashSet<int>(blockAndPartitionIds);
+    Dictionary<int, HashSet<int>> foundInIterations = new Dictionary<int, HashSet<int>>();
+    foundInIterations[0] = new HashSet<int>();
+    int iteration = firstPassIterations[0].Max();
+    Queue<int> queue = new Queue<int>();
+
+    foreach (var deepestId in blockAndPartitionIds)
+    {
+        // Skip visited block or partition
+        if (foundInIterations.ContainsKey(deepestId))
+        {
+            continue;
+        }
+
+        // Perform BFS starting from a block or partition
+        // mark it as visited with the iteration number
+        iteration++;
+        foundInIterations[0].Add(iteration);
+        if (!foundInIterations.ContainsKey(deepestId))
+        {
+            foundInIterations[deepestId] = new HashSet<int>();
+        }
+        foundInIterations[deepestId].Add(iteration);
+
+        queue.Enqueue(deepestId);
+        while (queue.Count > 0)
+        {
+            int id = queue.Dequeue();
+            RectFraction bounds = gridModel.bounds[id];
+            HashSet<int> adjacentIds = gridModel.AdjacentBlockIds(id);
+            if (adjacentIds == null)
+            {
+                continue;
+            }
+
+            foreach (int adjacentId in adjacentIds)
+            {
+                // Skip if block or partition is outside of the given set of ids
+                if (!ids.Contains(adjacentId))
+                {
+                    continue;
+                }
+                // Skip if block or partition has already been visited during this iteration
+                if (foundInIterations.ContainsKey(adjacentId) && foundInIterations[adjacentId].Contains(iteration))
+                {
+                    continue;
+                }
+                // Don't go down, only left, right and up.
+                RectFraction adjacentBounds = gridModel.bounds[adjacentId];
+                if (bounds.IsBottomAdjacentTo(adjacentBounds))
+                {
+                    continue;
+                }
+                Permeability maxPermeability = MaxBoundsPermeability(gridModel, id, adjacentId);
+                if (maxPermeability.GreaterOrEquals(threshold))
+                {
+                    if (!foundInIterations.ContainsKey(adjacentId))
+                    {
+                        foundInIterations[adjacentId] = new HashSet<int>();
+                    }
+                    foundInIterations[adjacentId].Add(iteration);
+                    queue.Enqueue(adjacentId);
+                }
+            }
+        }
+    }
+
+    // Combining the results of the 1st and the 2nd passes
+    foreach (var id in foundInIterations.Keys)
+    {
+        if (firstPassIterations.ContainsKey(id))
+        {
+            foundInIterations[id].UnionWith(firstPassIterations[id]);
+        }
+    }
+
+    return foundInIterations;
+}
+{% endhighlight %}
+<br>
+
+This game received an [Academics Choice Award][cloud-machine-award] for its innovative approach to teaching math.
+
+[cloud-machine-award]: http://www.academicschoice.com/games/cloud-machine.php
