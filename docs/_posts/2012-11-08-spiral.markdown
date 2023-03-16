@@ -1,0 +1,170 @@
+---
+layout: post
+title:  "The Spiral"
+date:   2012-11-08
+categories: jekyll update
+---
+I was asked to solve this problem in an interview:
+> Given a two-dimensional array print the values of the elements in a spiral pattern.
+
+For example the values from the 3x3 array below: 
+{% highlight csharp %}
+    1 2 3
+    4 5 6
+    7 8 9    
+{% endhighlight %}
+
+will be printed in the following order: 
+{% highlight csharp %}
+    1, 2, 3, 6, 9, 8, 7, 4, 5
+{% endhighlight %}
+
+I started coding the most obvious solution hoping to get all the limits right. It was quite challenging to do it on a whiteboard without a debugger. The interviewer actually had a laptop and running the code to check if it worked. I ended up writing something like this: 
+
+{% highlight csharp %}
+static void PrintSpiral(int[,] matrix) {
+    int xMin = 0;
+    int xMax = matrix.GetLength(1) - 1;
+    int yMin = 0;
+    int yMax = matrix.GetLength(0) - 1;
+    int x = xMin;
+    int y = yMin;
+    while (xMin < xMax || yMin < yMax) {
+        for (x = xMin, y = yMin; x <= xMax; x++) {
+            Console.WriteLine($"{x},{y} = {matrix[y, x]}");
+        }
+        yMin++;
+        for (x = xMax, y = yMin; y <= yMax; y++) {
+            Console.WriteLine($"{x},{y} = {matrix[y, x]}");
+        }
+        xMax--;
+        for (x = xMax, y = yMax; x >= xMin; x--) {
+            Console.WriteLine($"{x},{y} = {matrix[y, x]}");
+        }
+        yMax--;
+        for (x = xMin, y = yMax; y >= yMin; y--) {
+            Console.WriteLine($"{x},{y} = {matrix[y, x]}");
+        }
+        xMin++;
+    }
+}
+{% endhighlight %}
+
+There is nothing wrong with this approach and it's quite efficient: O(1) space and O(N) time complexity (where N is number of elements in the array). But it's not very readable and easy to debug.
+<br>
+
+Another way to traverse the array is by checking the neighbor cells and skipping the ones already visited (essentially DFS algorithm).
+
+{% highlight csharp %}
+static void PrintSpiral(int[,] matrix) {
+    int width = matrix.GetLength(1);
+    int height = matrix.GetLength(0);
+    bool[,] visited = new bool[height, width];
+
+    (int, int) cell = (0, 0);
+    int x, y;
+    while(cell != (-1, -1)) {
+        x = cell.Item1;
+        y = cell.Item2;
+        Console.WriteLine($"{x},{y} = {matrix[y, x]}");
+        cell = NextCell(x, y, width, height, visited);
+    }
+}
+
+static (int, int) NextCell(int x, int y, int width, int height,  bool[,] visited){
+
+    foreach((int, int) neighbor in AdjacentCells(x, y)) {
+        int neighborX = neighbor.Item1;
+        int neighborY = neighbor.Item2;
+        if (neighborX < 0 || neighborX >= width || neighborY < 0 || neighborY >= height) {
+            continue;
+        }
+
+        if (!visited[neighborY, neighborX]) {
+            visited[y, x] = true;
+            return (neighborX, neighborY);
+        }
+    }
+
+    return (-1, -1);
+} 
+
+static IEnumerable<(int, int)> AdjacentCells(int x, int y) {
+    yield return (x + 1, y);
+    yield return (x, y + 1);
+    yield return (x - 1, y);
+    yield return (x, y - 1);
+}
+{% endhighlight %}
+<br>
+
+This is more readable and much easier to follow. It technically has same space and time complexity but does require allocation of another array.
+
+The `AdjacentCells` method is a convenient way to iterate through a set of values and can be easily modify to let's say traverse the array counterclockwise:
+
+{% highlight csharp %}
+static IEnumerable<(int, int)> AdjacentCells(int x, int y) {
+    yield return (x, y + 1);
+    yield return (x + 1, y);
+    yield return (x, y - 1);
+    yield return (x - 1, y);
+}
+{% endhighlight %}
+<br>
+
+Of course a textbook implementation using DFS algorithm would be something like this:
+
+{% highlight csharp %}
+static void PrintSpiral(int[,] matrix) {
+    int width = matrix.GetLength(1);
+    int height = matrix.GetLength(0);
+    bool[,] visited = new bool[height, width];
+
+    Stack<(int, int)> stack = new();
+    stack.Push((0, 0));
+
+    while(stack.Count > 0) {
+        (int, int) next = stack.Peek();
+        stack.Pop();
+
+        int x = next.Item1;
+        int y = next.Item2;
+
+        if(!IsValid(x, y, width, height, visited)) {
+            continue;
+        }
+        
+        visited[y, x] = true;
+
+        Console.WriteLine($"{x},{y} = {matrix[y, x]}");
+
+        foreach((int, int) cell in AdjacentCells(x, y)) {
+            stack.Push(cell);
+        }
+    }
+}
+
+static bool IsValid(int x, int y, int width, int height, bool[,] visited){
+    if (x < 0 || x >= width || y < 0 || y >= height) {
+        return false;
+    }
+
+    if (visited[y, x]) {
+        return false;
+    }
+
+    return true;
+} 
+
+static IEnumerable<(int, int)> AdjacentCells(int x, int y) {
+    yield return (x, y - 1);
+    yield return (x - 1, y);
+    yield return (x, y + 1);
+    yield return (x + 1, y);
+}
+{% endhighlight %}
+<br>
+
+Not surprisingly this is the cleanest implementation but you have to recognize this problem is about DFS otherwise it would be difficult to come up with this solution on the spot. 
+
+Note: the order of cells returned by `AdjacentCells` method is different to accomodate the stack logic. The method from the previous example would print the values in a zig-zag pattern. 
